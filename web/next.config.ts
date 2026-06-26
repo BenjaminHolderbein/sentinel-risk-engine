@@ -6,8 +6,14 @@ const nextConfig: NextConfig = {
   // the serverless function output.
   serverExternalPackages: ["onnxruntime-node"],
   outputFileTracingIncludes: {
-    "/api/score": ["./public/model/**"],
-    "/api/seed": ["./data/**"],
+    // The tracer follows the onnxruntime-node .node addon but misses its
+    // libonnxruntime.so sidecar, so force-include the native binaries along with
+    // the model + seed files the API routes read at runtime.
+    "/api/**": [
+      "./public/model/**",
+      "./data/**",
+      "./node_modules/onnxruntime-node/bin/**",
+    ],
   },
 };
 
