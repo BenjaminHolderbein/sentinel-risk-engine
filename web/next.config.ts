@@ -16,6 +16,15 @@ const nextConfig: NextConfig = {
     ],
     "/api/seed": ["./data/**"],
   },
+  outputFileTracingExcludes: {
+    // Drop the non-Vercel platform binaries that marking the package external
+    // would otherwise pull in (Windows ~128MB, macOS ~74MB, linux-arm64).
+    "/api/score": [
+      "./node_modules/onnxruntime-node/bin/napi-v6/win32/**",
+      "./node_modules/onnxruntime-node/bin/napi-v6/darwin/**",
+      "./node_modules/onnxruntime-node/bin/napi-v6/linux/arm64/**",
+    ],
+  },
 };
 
 export default nextConfig;
