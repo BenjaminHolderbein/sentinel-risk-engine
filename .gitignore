@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+ml/.venv/
+.python-version
+
+# Regenerable ML artifacts (rebuild with `uv run sentinel all`)
+ml/artifacts/
+
+# Node / Next
+node_modules/
+web/.next/
+web/out/
+web/next-env.d.ts
+.turbo/
+
+# Env & secrets
+.env
+.env.local
+.env*.local
+!web/.env.example
+
+# Vercel
+.vercel/
+
+# Playwright / scratch
+**/.playwright-mcp/
+.DS_Store

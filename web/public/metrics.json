@@ -1,0 +1,98 @@
+{
+  "selected_model": "xgboost",
+  "candidates": {
+    "logreg": {
+      "pr_auc_test": 0.9709822082003747
+    },
+    "xgboost": {
+      "pr_auc_test": 0.9838844696363717
+    },
+    "lightgbm": {
+      "pr_auc_test": 0.9832473966557698
+    }
+  },
+  "uncalibrated_test": {
+    "roc_auc": 0.9992811295568986,
+    "pr_auc": 0.9838844696363717,
+    "brier": 0.004649342969059944,
+    "recall_at_1pct_fpr": 0.9969445656918376,
+    "recall_at_2pct_fpr": 0.9991270187690965,
+    "threshold": 0.5,
+    "precision_at_threshold": 0.886381631037213,
+    "recall_at_threshold": 0.9773024879965081,
+    "f1_at_threshold": 0.9296242474569234,
+    "confusion": {
+      "tn": 55453,
+      "fp": 287,
+      "fn": 52,
+      "tp": 2239
+    },
+    "prevalence": 0.03947889920904344,
+    "n": 58031
+  },
+  "calibrated_test": {
+    "roc_auc": 0.9992045675054585,
+    "pr_auc": 0.9787598969991049,
+    "brier": 0.00404764898121357,
+    "recall_at_1pct_fpr": 0.9951986032300305,
+    "recall_at_2pct_fpr": 0.9978175469227412,
+    "threshold": 0.027027027681469917,
+    "precision_at_threshold": 0.7810044414075845,
+    "recall_at_threshold": 0.9978175469227412,
+    "f1_at_threshold": 0.8761977769260252,
+    "confusion": {
+      "tn": 55099,
+      "fp": 641,
+      "fn": 5,
+      "tp": 2286
+    },
+    "prevalence": 0.03947889920904344,
+    "n": 58031
+  },
+  "threshold_policy": {
+    "threshold": 0.027027027681469917,
+    "max_fpr_budget": 0.02,
+    "fpr": 0.012423890472670961,
+    "recall": 0.9966832504145937
+  },
+  "detection_by_attack_type": {
+    "credential_stuffing": {
+      "events": 2194,
+      "detected": 2192,
+      "recall": 0.9990884229717412
+    },
+    "impossible_travel": {
+      "events": 44,
+      "detected": 43,
+      "recall": 0.9772727272727273
+    },
+    "new_device_takeover": {
+      "events": 53,
+      "detected": 51,
+      "recall": 0.9622641509433962
+    }
+  },
+  "feature_order": [
+    "hour",
+    "dow",
+    "is_off_hours",
+    "account_age_days",
+    "time_since_last_login_min",
+    "geo_velocity_kmh",
+    "distance_from_home_km",
+    "country_is_home",
+    "country_changed_from_last",
+    "device_is_known",
+    "ip_is_known",
+    "asn_is_known",
+    "failed_attempts_user_1h",
+    "failed_attempts_ip_1h",
+    "distinct_countries_24h",
+    "distinct_devices_24h",
+    "distinct_ips_24h",
+    "logins_user_1h",
+    "device_type_code",
+    "os_code",
+    "auth_method_code"
+  ]
+}
