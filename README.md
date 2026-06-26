@@ -5,9 +5,9 @@ login is turned into contextual features from the account's recent history, scor
 gradient-boosted model, and returned with a risk band and human-readable reason codes — in
 single-digit milliseconds, with no separate model server.
 
-**Live demo: [sentinel-risk-engine.vercel.app](https://sentinel-risk-engine.vercel.app)** · the whole
-thing runs on one free Vercel deployment + a serverless Postgres feature store. Press **Start stream**
-to watch login events get scored in real time, or **Inject attack** to fire an obvious takeover.
+**Live demo: [sentinel.holderbein.dev](https://sentinel.holderbein.dev)** · the whole thing runs on one
+free Vercel deployment + a serverless Postgres feature store. Press **Start stream** to watch login
+events get scored in real time, or **Inject attack** to fire an obvious takeover.
 
 ![Sentinel live dashboard](docs/dashboard.png)
 
