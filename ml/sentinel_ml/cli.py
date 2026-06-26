@@ -145,6 +145,8 @@ def _sync_to_web() -> None:
     web_model.mkdir(parents=True, exist_ok=True)
     shutil.copy2(config.ONNX_PATH, web_model / "model.onnx")
     shutil.copy2(config.FEATURE_SPEC_PATH, web_model / "feature_spec.json")
+    if config.MODEL_TREES_PATH.exists():
+        shutil.copy2(config.MODEL_TREES_PATH, web_model / "model_trees.json")
     # metrics + plots power the dashboard's model page
     public = web_model.parent
     shutil.copy2(config.METRICS_PATH, public / "metrics.json")

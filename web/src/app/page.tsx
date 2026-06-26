@@ -18,8 +18,8 @@ export default function Home() {
       <p className="max-w-3xl text-sm text-muted-foreground">
         Each login event is scored in real time: contextual features are computed from the
         account&apos;s recent history in the feature store, fed to a calibrated gradient-boosted
-        model running on ONNX inside the serverless function, and returned with reason codes — all
-        in single-digit milliseconds.
+        model running inside the serverless function, and returned with reason codes — all in
+        single-digit milliseconds.
       </p>
 
       <Kpis stats={s.stats} />

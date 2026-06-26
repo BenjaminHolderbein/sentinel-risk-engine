@@ -1,39 +1,71 @@
-// ONNX model runner. Loads the gradient-boosted model exported by the offline
-// pipeline and runs inference inside the Node serverless function — no separate
-// Python service, no network hop. The session is created once per warm function
-// instance and reused across invocations.
+// Model runner — pure-TypeScript gradient-boosted tree inference.
+//
+// The XGBoost model trained offline is compiled to a portable JSON of decision
+// trees (`model_trees.json`) plus an empirically-derived intercept. We walk the
+// trees here with zero native or wasm dependencies, so the scorer runs in any
+// Node serverless function (or the edge) and the function bundle stays tiny.
+// A parity check asserts this reproduces the Python pipeline to ~1e-6.
 
+import fs from "node:fs";
 import path from "node:path";
-import * as ort from "onnxruntime-node";
 
-import { calibrate, loadSpec, type FeatureSpec } from "./spec";
+import { calibrate, loadSpec } from "./spec";
 
-let sessionPromise: Promise<ort.InferenceSession> | null = null;
-
-function getSession(): Promise<ort.InferenceSession> {
-  if (!sessionPromise) {
-    const modelPath = path.join(process.cwd(), "public", "model", "model.onnx");
-    sessionPromise = ort.InferenceSession.create(modelPath, {
-      executionProviders: ["cpu"],
-      graphOptimizationLevel: "all",
-    });
-  }
-  return sessionPromise;
+interface TreeNode {
+  nodeid: number;
+  leaf?: number;
+  split?: string; // "f<index>"
+  split_condition?: number;
+  yes?: number;
+  no?: number;
+  missing?: number;
+  children?: TreeNode[];
 }
+
+interface TreeModel {
+  trees: TreeNode[];
+  intercept: number;
+  n_features: number;
+}
+
+let cached: TreeModel | null = null;
+
+function loadTrees(): TreeModel {
+  if (cached) return cached;
+  const p = path.join(process.cwd(), "public", "model", "model_trees.json");
+  cached = JSON.parse(fs.readFileSync(p, "utf8")) as TreeModel;
+  return cached;
+}
+
+function leafValue(node: TreeNode, x: number[]): number {
+  let cur = node;
+  while (cur.leaf === undefined) {
+    const f = Number(cur.split!.slice(1));
+    const v = x[f];
+    const nextId = Number.isNaN(v)
+      ? cur.missing
+      : v < cur.split_condition!
+        ? cur.yes
+        : cur.no;
+    cur = cur.children!.find((c) => c.nodeid === nextId)!;
+  }
+  return cur.leaf;
+}
+
+const sigmoid = (z: number) => 1 / (1 + Math.exp(-z));
 
 export interface RawAndCalibrated {
   raw: number;
   calibrated: number;
 }
 
-/** Run the model on one feature vector and return raw + calibrated probability. */
+/** Score one feature vector → raw + calibrated probability. */
 export async function runModel(vector: number[]): Promise<RawAndCalibrated> {
-  const spec: FeatureSpec = loadSpec();
-  const session = await getSession();
-  const input = new ort.Tensor("float32", Float32Array.from(vector), [1, vector.length]);
-  const outputs = await session.run({ [spec.onnx.input_name]: input });
-  const probs = outputs[spec.onnx.prob_output_name].data as Float32Array;
-  const raw = Number(probs[spec.onnx.positive_index]);
+  const spec = loadSpec();
+  const model = loadTrees();
+  let margin = model.intercept;
+  for (const tree of model.trees) margin += leafValue(tree, vector);
+  const raw = sigmoid(margin);
   return { raw, calibrated: calibrate(spec, raw) };
 }
 
@@ -46,7 +78,7 @@ export function riskBand(score: number, threshold: number): RiskBand {
   return "low";
 }
 
-/** Warm the session at module load so the first real request isn't slow. */
+/** Warm the model cache at module load so the first request isn't slow. */
 export function warmup(): void {
-  void getSession();
+  loadTrees();
 }

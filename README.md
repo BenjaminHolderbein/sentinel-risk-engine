@@ -25,7 +25,7 @@ production, and closing the feedback loop:
 | Feature-engineer from logs & contextual signals | Causal, point-in-time features ([`ml/sentinel_ml/features.py`](ml/sentinel_ml/features.py)) |
 | Tree-based models + classical baseline | XGBoost / LightGBM / logistic regression ([`ml/sentinel_ml/train.py`](ml/sentinel_ml/train.py)) |
 | Imbalanced data, real-time decisions | PR-AUC, calibration, FPR-budget threshold; sub-ms inference |
-| Deploy & maintain a production pipeline | ONNX served from a Vercel function ([`web/src/lib/scoring/`](web/src/lib/scoring)) |
+| Deploy & maintain a production pipeline | Compiled tree model served from a Vercel function, zero native deps ([`web/src/lib/scoring/`](web/src/lib/scoring)) |
 | Feedback loops & iterative retraining | Analyst labels → retraining supervision ([feedback API](web/src/app/api/feedback/route.ts)) |
 
 All data is **synthetic and generated locally** — no real user data is involved.
@@ -39,25 +39,28 @@ flowchart LR
   subgraph Offline["Offline — Python (ml/)"]
     G[Synthetic ATO<br/>event generator] --> F[Causal feature<br/>engineering]
     F --> T[Train + calibrate<br/>XGBoost / LightGBM / LR]
-    T --> X[Export ONNX<br/>+ feature_spec.json]
+    T --> X[Export ONNX +<br/>compile to tree JSON + spec]
   end
   subgraph Online["Online — Vercel (web/)"]
     A[Login event] --> S["/api/score"]
     S --> H[(Neon Postgres<br/>feature store)]
     H --> FE[Online features<br/>parity-matched to Python]
-    FE --> M[ONNX runtime<br/>in Node function]
+    FE --> M[Pure-TS tree scorer<br/>in serverless function]
     M --> C[Isotonic calibration<br/>+ reason codes]
     C --> R[Risk score + band]
     C --> H
   end
-  X -. model.onnx + spec .-> M
+  X -. tree model + spec .-> M
 ```
 
 **The model is trained in Python and served in TypeScript.** The gradient-boosted model is exported
-to ONNX and the entire feature contract (ordered features, categorical encodings, clip bounds,
-calibration table, operating threshold) is serialized to `feature_spec.json`. Both sides import that
-one file, and a [parity check](web/scripts/parity-check.ts) asserts the TypeScript serving path
-reproduces the Python pipeline to within **1e-7** — so there is no train/serve skew.
+to ONNX (a parity-checked, portable artifact) and also compiled to a compact JSON of decision trees
+that a **zero-dependency TypeScript scorer** walks inside the serverless function — no native module,
+no wasm, a tiny bundle that runs anywhere. The entire feature contract (ordered features, categorical
+encodings, clip bounds, calibration table, operating threshold) is serialized to `feature_spec.json`,
+both sides import that one file, and a [parity check](web/scripts/parity-check.ts) asserts the
+TypeScript serving path reproduces the Python pipeline to within **1e-6** — so there is no
+train/serve skew.
 
 **Features are computed online from the feature store.** At score time Sentinel reads the account's
 recent events and the source IP's recent failures from Postgres and derives the same point-in-time
@@ -112,14 +115,14 @@ See [`docs/MODEL_CARD.md`](docs/MODEL_CARD.md) and [`docs/DESIGN.md`](docs/DESIG
 
 ```
 sentinel-risk-engine/
-├─ ml/                      # Python: generation, features, training, ONNX export
-│  └─ sentinel_ml/          # uv run sentinel all  →  model.onnx + feature_spec.json + demo data
+├─ ml/                      # Python: generation, features, training, ONNX + tree export
+│  └─ sentinel_ml/          # uv run sentinel all  →  model_trees.json + feature_spec.json + demo data
 ├─ web/                     # Next.js app (App Router, TypeScript) deployed on Vercel
-│  ├─ src/lib/scoring/      # ONNX runtime + online features (parity-matched to Python)
+│  ├─ src/lib/scoring/      # pure-TS tree scorer + online features (parity-matched to Python)
 │  ├─ src/lib/db/           # Drizzle schema for the Neon Postgres feature store
 │  ├─ src/app/api/          # /score /feedback /events /stats /seed
 │  └─ src/app/              # live dashboard + model card
-└─ .github/workflows/ci.yml # ML lint+tests, ONNX parity, web build
+└─ .github/workflows/ci.yml # ML lint+tests, model parity, web build
 ```
 
 ---
@@ -144,17 +147,18 @@ pnpm db:migrate                 # create the feature-store schema
 pnpm dev                        # http://localhost:3000  → press "Start stream"
 ```
 
-The ONNX serving path is verified against the Python pipeline with `pnpm parity`.
+The TypeScript serving path is verified against the Python pipeline with `pnpm parity`.
 
 ---
 
 ## Deployment
 
 Deployed on **Vercel** with a **Neon** serverless Postgres feature store (provisioned through the
-Vercel Marketplace, so `DATABASE_URL` is injected automatically). The model runs via
-`onnxruntime-node` inside a Node serverless function — co-located with the database, online scoring
-is dominated by a couple of indexed point lookups, not the inference. CI runs the Python tests, the
-ONNX parity check, and the production build on every push.
+Vercel Marketplace, so `DATABASE_URL` is injected automatically). The compiled tree model runs in
+pure TypeScript inside the serverless function — no native module to bundle, so the function stays
+small and cold starts stay fast. Co-located with the database, online scoring is dominated by a
+couple of indexed point lookups, not the inference. CI runs the Python tests, the model parity
+check, and the production build on every push.
 
 ---
 

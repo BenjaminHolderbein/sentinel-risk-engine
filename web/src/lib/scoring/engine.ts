@@ -2,7 +2,7 @@
 //   1. reads the account's recent history + the IP's recent failures from the
 //      feature store (Postgres) — the "online features from contextual signals",
 //   2. computes the feature vector (features.ts, parity-matched to Python),
-//   3. runs the ONNX model and calibrates the score,
+//   3. runs the compiled tree model and calibrates the score,
 //   4. derives reason codes, and
 //   5. appends the scored event back to the store (which becomes history for the
 //      next event — the live feedback the system learns from).

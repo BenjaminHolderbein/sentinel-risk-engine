@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Sentinel — Real-Time Account-Takeover Risk Engine",
   description:
-    "Real-time ML risk scoring for authentication events: calibrated gradient-boosted detection of account-takeover, served at the edge via ONNX.",
+    "Real-time ML risk scoring for authentication events: calibrated gradient-boosted detection of account-takeover, served from a serverless function with zero native dependencies.",
 };
 
 export default function RootLayout({

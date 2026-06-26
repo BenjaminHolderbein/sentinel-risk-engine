@@ -2,17 +2,21 @@
 
 Why the system is built the way it is.
 
-## 1. Train in Python, serve in TypeScript — via ONNX
+## 1. Train in Python, serve in TypeScript
 
 The ML work (feature engineering, model selection, calibration) belongs in Python. But the product
 is a low-latency web service, and standing up a separate Python model server would add a network
 hop, a second platform to operate, and a second place for dependencies to rot.
 
-Instead the model is exported to **ONNX** and run with `onnxruntime-node` *inside* the Next.js
-serverless function. One deployment, no model server, no cross-service hop. The risk with two
-languages is train/serve skew, so the feature contract is serialized once (`feature_spec.json`) and a
-**parity test** asserts the TS path reproduces Python to ~1e-7. Inference itself is sub-millisecond;
-online latency is dominated by the feature-store lookups.
+So the trained model ships two ways: exported to **ONNX** as a portable, standard artifact, and
+**compiled to a compact JSON of decision trees** that a ~30-line pure-TypeScript scorer walks
+*inside* the Next.js serverless function. One deployment, no model server, no cross-service hop — and
+critically, no native module or wasm to bundle, so the function stays tiny and cold starts stay fast.
+(An earlier attempt to run `onnxruntime-node` in the function pulled in ~250MB of per-platform native
+binaries and blew the function-size limit; compiling the trees sidesteps that entirely.) The risk
+with two languages is train/serve skew, so the feature contract is serialized once
+(`feature_spec.json`) and a **parity test** asserts the TS path reproduces Python to ~1e-6. Inference
+itself is sub-millisecond; online latency is dominated by the feature-store lookups.
 
 ## 2. Online features from a feature store
 
@@ -53,8 +57,9 @@ scripted step (`uv run sentinel all`) rather than an automated cron here, but th
 
 - **postgres.js over the Neon HTTP driver** — works identically against local Postgres and Neon's
   pooler, so dev and prod run the same code path.
-- **Ordinal-encoded categoricals** rather than one-hot — keeps the ONNX input a single float tensor,
-  which makes the TS serving path trivial and bulletproof; GBDTs handle ordinal codes well.
+- **Ordinal-encoded categoricals** rather than one-hot — keeps the model input a single flat float
+  vector, which makes both the ONNX export and the TS tree scorer trivial; GBDTs handle ordinal codes
+  well.
 - **Replay on the data's own timeline** — the live demo streams events with their original
   timestamps so each account's seeded history stays inside the feature window and the online features
   match the training distribution exactly.

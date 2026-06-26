@@ -57,6 +57,44 @@ def _convert(model, name: str, n_features: int):
     raise ValueError(f"no converter for {name}")
 
 
+def export_trees(model, sample: np.ndarray) -> dict:
+    """Compile the XGBoost model to a portable JSON of decision trees + an
+    intercept, so the serverless scorer can run it in pure TypeScript with zero
+    native dependencies. The intercept is derived empirically (margin minus the
+    summed leaf values) so we never have to second-guess XGBoost's base_score
+    conventions across versions.
+    """
+    import json as _json
+
+    import xgboost as xgb
+
+    booster = model.get_booster()
+    trees = [_json.loads(t) for t in booster.get_dump(dump_format="json")]
+
+    def leaf(node, x):
+        while "leaf" not in node:
+            f = int(node["split"][1:])
+            v = x[f]
+            nid = node["missing"] if v != v else (node["yes"] if v < node["split_condition"] else node["no"])
+            node = next(c for c in node["children"] if c["nodeid"] == nid)
+        return float(node["leaf"])
+
+    margins = booster.predict(xgb.DMatrix(sample), output_margin=True)
+    sums = np.array([sum(leaf(t, x) for t in trees) for x in sample])
+    intercept = float(np.mean(margins - sums))
+    resid = float(np.max(np.abs((margins - sums) - intercept)))
+
+    # verify the pure-walk reproduces predict_proba before shipping
+    raw = 1.0 / (1.0 + np.exp(-(intercept + sums)))
+    ref = model.predict_proba(sample)[:, 1]
+    max_diff = float(np.max(np.abs(raw - ref)))
+    print(f"Tree-walk parity max|Δ| = {max_diff:.2e} (intercept residual {resid:.2e})")
+    if max_diff > 1e-4:
+        raise RuntimeError(f"tree export parity failed: {max_diff:.3e}")
+
+    return {"trees": trees, "intercept": intercept, "n_features": int(sample.shape[1])}
+
+
 def _find_prob_output(sess: ort.InferenceSession) -> tuple[str, int]:
     """Return (output_name, positive_class_index) for the probability tensor."""
     for out in sess.get_outputs():
@@ -108,6 +146,18 @@ def export() -> dict:
         },
         "parity_max_abs_diff": max_diff,
     }
+    # Compile to portable trees for the zero-dependency TS serverless scorer.
+    if name == "xgboost":
+        from .config import MODEL_TREES_PATH
+
+        trees = export_trees(best, sample)
+        MODEL_TREES_PATH.write_text(json.dumps(trees))
+        spec["serving"] = "trees"
+        print(f"Wrote model_trees.json ({MODEL_TREES_PATH.stat().st_size // 1024} KB)")
+    else:
+        spec["serving"] = "onnx"
+        print(f"WARNING: selected model is {name}; TS serving path expects xgboost trees.")
+
     FEATURE_SPEC_PATH.write_text(json.dumps(spec, indent=2))
     print(f"Wrote {ONNX_PATH.name} ({ONNX_PATH.stat().st_size // 1024} KB) and feature_spec.json")
     return spec

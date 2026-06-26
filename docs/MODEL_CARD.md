@@ -2,7 +2,8 @@
 
 ## Overview
 A binary classifier that estimates the probability that an authentication event is part of an
-account-takeover (ATO) attack. Trained offline in Python, served in production as ONNX.
+account-takeover (ATO) attack. Trained offline in Python; exported to ONNX and compiled to a portable
+tree spec served by a zero-dependency TypeScript scorer.
 
 - **Model type:** Gradient-boosted decision trees (XGBoost), selected by PR-AUC over LightGBM and a
   logistic-regression baseline.
